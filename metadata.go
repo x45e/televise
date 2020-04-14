@@ -31,7 +31,7 @@ ELSE
 )
 
 type MetadataValue struct {
-	Value   string    `json:"value"`
+	Value   *string   `json:"value"`
 	Updated time.Time `json:"updated"`
 }
 

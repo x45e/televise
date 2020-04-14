@@ -7,4 +7,4 @@ FROM scratch
 EXPOSE 8080
 COPY --from=builder /build/televise /app/
 WORKDIR /app
-ENTRYPOINT  ["/televise"]
+ENTRYPOINT  ["televise"]

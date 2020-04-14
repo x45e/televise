@@ -22,6 +22,8 @@ CREATE TABLE [Metadata] (
 );`
 	sqlMetadataDropTable = `DROP TABLE [Metadata];`
 
+	sqlMetadataGet = `SELECT [Value] FROM [Metadata] WHERE [Key] = @Key;`
+
 	sqlMetadataUpsert = `
 IF NOT EXISTS (SELECT 1 FROM [Metadata] WHERE [Key] = @Key)
 	INSERT INTO [Metadata] ([Key], [Value], [Display]) VALUES (@Key, @Value, @Display)
@@ -56,6 +58,19 @@ func MetadataDisplayList(db *sql.DB) (m map[string]MetadataValue, err error) {
 		m[key] = val
 	}
 	return m, nil
+}
+
+func MetadataGet(db *sql.DB, key string) (val *string, err error) {
+	ctx := context.Background()
+	stmt, err := db.PrepareContext(ctx, sqlMetadataGet)
+	if err != nil {
+		return nil, err
+	}
+	err = stmt.QueryRowContext(ctx, key).Scan(&val)
+	if err != nil {
+		return nil, err
+	}
+	return val, nil
 }
 
 func MetadataSet(db *sql.DB, key string, value *string) (err error) {

@@ -76,3 +76,7 @@ func MetadataUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
+
+func HandleManifest(w http.ResponseWriter, r *http.Request) {
+
+}

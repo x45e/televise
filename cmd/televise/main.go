@@ -9,17 +9,18 @@ import (
 	"github.com/x45e/televise"
 )
 
-var (
-	addr = flag.String("addr", ":8080", "HTTP listener address")
-)
-
 func main() {
 	flag.Parse()
 
 	db := os.Getenv("TELEVISE_DB")
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	addr := ":" + port
 
 	cfg := televise.Config{
-		Addr: *addr,
+		Addr: addr,
 		DB:   db,
 	}
 

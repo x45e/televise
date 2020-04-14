@@ -89,8 +89,8 @@ func HandleManifest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if val == nil {
-		httpError(w, nil, http.StatusNotFound)
+		w.WriteHeader(http.StatusOK)
 		return
 	}
-	http.Redirect(w, r, *val, http.StatusFound)
+	fmt.Fprint(w, *val)
 }

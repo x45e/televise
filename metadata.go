@@ -66,7 +66,7 @@ func MetadataGet(db *sql.DB, key string) (val *string, err error) {
 	if err != nil {
 		return nil, err
 	}
-	err = stmt.QueryRowContext(ctx, key).Scan(&val)
+	err = stmt.QueryRowContext(ctx, sql.Named("Key", key)).Scan(&val)
 	if err != nil {
 		return nil, err
 	}

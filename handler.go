@@ -78,5 +78,15 @@ func MetadataUpdate(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleManifest(w http.ResponseWriter, r *http.Request) {
-
+	db := r.Context().Value(KeyDB).(*sql.DB)
+	val, err := MetadataGet(db, "manifest")
+	if err != nil {
+		if err == sql.ErrNoRows {
+			httpError(w, nil, http.StatusNotFound)
+			return
+		}
+		httpError(w, err, http.StatusInternalServerError)
+		return
+	}
+	fmt.Fprint(w, val)
 }

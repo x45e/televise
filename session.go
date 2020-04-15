@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"database/sql"
 	"errors"
+	"net"
 	"net/http"
 	"time"
 )
@@ -50,12 +51,17 @@ func NewIdentity(r *http.Request) *Identity {
 	if addr == "" {
 		addr = r.RemoteAddr
 	}
+	// ignore port
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		host = addr
+	}
 	h := sha1.New()
 	h.Write([]byte(addr))
 	h.Write([]byte(r.UserAgent()))
 	return &Identity{
 		Key:       h.Sum(nil),
-		Addr:      addr,
+		Addr:      host,
 		UserAgent: r.UserAgent(),
 	}
 }

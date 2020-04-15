@@ -9,6 +9,7 @@ import (
 
 var displayKeys = []string{
 	"movie",
+	"movie_id",
 }
 
 const (

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 )
 
 type contextKey int
@@ -75,6 +76,19 @@ func MetadataUpdate(w http.ResponseWriter, r *http.Request) {
 		httpError(w, err, http.StatusInternalServerError)
 		return
 	}
+	if r.URL.Query().Get("poll") == "true" && val != nil {
+		id, err := InsertOption(db, *val)
+		if err != nil {
+			httpError(w, err, http.StatusInternalServerError)
+			return
+		}
+		val := strconv.FormatInt(id, 10)
+		err = MetadataSet(db, k+"_id", &val)
+		if err != nil {
+			httpError(w, err, http.StatusInternalServerError)
+			return
+		}
+	}
 }
 
 func HandleManifest(w http.ResponseWriter, r *http.Request) {
@@ -93,4 +107,19 @@ func HandleManifest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fmt.Fprint(w, *val)
+}
+
+func HandleCastVote(w http.ResponseWriter, r *http.Request) {
+	db := r.Context().Value(KeyDB).(*sql.DB)
+	id, err := strconv.ParseInt(r.URL.Query().Get("id"), 10, 64)
+	if err != nil {
+		httpError(w, nil, http.StatusBadRequest)
+		return
+	}
+	err = CastVote(db, NewIdentity(r).Key, id)
+	if err != nil {
+		httpError(w, err, http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }

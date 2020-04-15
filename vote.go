@@ -25,7 +25,7 @@ ALTER TABLE [Vote] ADD CONSTRAINT [PK_Vote] PRIMARY KEY ([Key], [OptionId]);`
 
 	sqlDropVoteTable = `DROP TABLE [Vote];`
 
-	sqlVoteInsert = `INSERT INTO [Vote] ([Key, OptionId]) VALUES (@Key, @OptionId);`
+	sqlVoteInsert = `INSERT INTO [Vote] ([Key], [OptionId]) VALUES (@Key, @OptionId);`
 )
 
 func InsertOption(db *sql.DB, title string) (id int64, err error) {

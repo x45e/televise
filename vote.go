@@ -18,10 +18,11 @@ CREATE TABLE [Option] (
 	sqlCreateVoteTable = `
 CREATE TABLE [Vote] (
 	[Key] BINARY(20) NOT NULL,
-	[OptionId] BIGINT FOREIGN KEY REFERENCES [Option]([Id]),
+	[OptionId] BIGINT NOT NULL FOREIGN KEY REFERENCES [Option]([Id]),
 	[At] DATETIME NOT NULL DEFAULT GETDATE()
 );
 ALTER TABLE [Vote] ADD CONSTRAINT [PK_Vote] PRIMARY KEY ([Key], [OptionId]);`
+
 	sqlDropVoteTable = `DROP TABLE [Vote];`
 
 	sqlVoteInsert = `INSERT INTO [Vote] ([Key, OptionId]) VALUES (@Key, @OptionId);`

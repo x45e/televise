@@ -123,3 +123,13 @@ func HandleCastVote(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 }
+
+func HandleViewers(w http.ResponseWriter, r *http.Request) {
+	db := r.Context().Value(KeyDB).(*sql.DB)
+	n, err := SessionCount(db)
+	if err != nil {
+		httpError(w, err, http.StatusInternalServerError)
+		return
+	}
+	fmt.Fprint(w, n)
+}

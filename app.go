@@ -13,13 +13,13 @@ import (
 // Config defines configuration options for the Televise App.
 type Config struct {
 	Addr string
-	DB string
+	DB   string
 }
 
 // App represents a Televise application.
 type App struct {
 	srv *http.Server
-	db *sql.DB
+	db  *sql.DB
 }
 
 // Start starts a new app instance.
@@ -46,7 +46,7 @@ func Start(cfg Config) (*App, error) {
 
 	app := &App{
 		srv: &http.Server{Addr: cfg.Addr},
-		db: db,
+		db:  db,
 	}
 
 	app.RegisterRoutes(ctx)
@@ -89,4 +89,5 @@ func (App) RegisterRoutes(ctx context.Context) {
 	http.Handle("/update", allowAll(withContext(ctx, http.HandlerFunc(MetadataUpdate))))
 	http.Handle("/manifest", allowAll(withContext(ctx, http.HandlerFunc(HandleManifest))))
 	http.Handle("/vote", allowAll(withContext(ctx, http.HandlerFunc(HandleCastVote))))
+	http.Handle("/count", allowAll(withContext(ctx, http.HandlerFunc(HandleViewers))))
 }

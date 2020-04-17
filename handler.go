@@ -133,3 +133,23 @@ func HandleViewers(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Fprint(w, n)
 }
+
+func HandleLastResults(w http.ResponseWriter, r *http.Request) {
+	db := r.Context().Value(KeyDB).(*sql.DB)
+	title, votes, err := LastVote(db)
+	if err != nil {
+		httpError(w, err, http.StatusInternalServerError)
+		return
+	}
+	err = json.NewEncoder(w).Encode(struct {
+		Title string `json:"title"`
+		Votes int64  `json:"votes"`
+	}{
+		Title: title,
+		Votes: votes,
+	})
+	if err != nil {
+		httpError(w, err, http.StatusInternalServerError)
+		return
+	}
+}

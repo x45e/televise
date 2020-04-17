@@ -90,4 +90,5 @@ func (App) RegisterRoutes(ctx context.Context) {
 	http.Handle("/manifest", allowAll(withContext(ctx, http.HandlerFunc(HandleManifest))))
 	http.Handle("/vote", allowAll(withContext(ctx, http.HandlerFunc(HandleCastVote))))
 	http.Handle("/count", allowAll(withContext(ctx, http.HandlerFunc(HandleViewers))))
+	http.Handle("/results", allowAll(withContext(ctx, http.HandlerFunc(HandleLastResults))))
 }

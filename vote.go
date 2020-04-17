@@ -26,6 +26,14 @@ ALTER TABLE [Vote] ADD CONSTRAINT [PK_Vote] PRIMARY KEY ([Key], [OptionId]);`
 	sqlDropVoteTable = `DROP TABLE [Vote];`
 
 	sqlVoteInsert = `INSERT INTO [Vote] ([Key], [OptionId]) VALUES (@Key, @OptionId);`
+
+	sqlLastVoteResults = `
+	SELECT TOP 1 op.[Title], COUNT([Key])
+	FROM [Vote] AS v
+JOIN [Option] AS op
+	ON op.[Id] = v.[OptionId]
+	GROUP BY op.[Title], op.[Id]
+	ORDER BY op.[Id] DESC;`
 )
 
 func InsertOption(db *sql.DB, title string) (id int64, err error) {
@@ -60,4 +68,14 @@ func CastVote(db *sql.DB, key []byte, optionId int64) error {
 		return err
 	}
 	return nil
+}
+
+func LastVote(db *sql.DB) (title string, votes int64, err error) {
+	ctx := context.Background()
+	stmt, err := db.PrepareContext(ctx, sqlLastVoteResults)
+	if err != nil {
+		return "", -1, err
+	}
+	err = stmt.QueryRowContext(ctx).Scan(&title, &votes)
+	return title, votes, err
 }

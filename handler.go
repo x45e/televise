@@ -42,11 +42,12 @@ func HandleInfo(w http.ResponseWriter, r *http.Request) {
 		httpError(w, err, http.StatusInternalServerError)
 		return
 	}
-	meta, err := MetadataDisplayList(db)
+	/*meta, err := MetadataDisplayList(db)
 	if err != nil {
 		httpError(w, err, http.StatusInternalServerError)
 		return
-	}
+	}*/
+	meta := make(map[string]MetadataValue)
 	info := struct {
 		Viewers int64                    `json:"viewers"`
 		Meta    map[string]MetadataValue `json:"meta"`

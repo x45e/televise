@@ -37,7 +37,7 @@ ELSE
 SELECT TOP (1) [Key], [Start], [LastSeen] FROM [Session]
 WHERE [Key] = @Key ORDER BY [LastSeen] DESC;`
 
-	InactiveSessionLimit = 10 * time.Second
+	InactiveSessionLimit = 25 * time.Second
 )
 
 type Identity struct {

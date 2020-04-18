@@ -24,7 +24,7 @@ ALTER TABLE [Session] ADD CONSTRAINT [PK_Session] PRIMARY KEY ([Key], [Start]);`
 	sqlDropSessionTable = `DROP TABLE [Session];`
 
 	sqlUpdateSession = `
-IF NOT EXISTS (SELECT 1 FROM [Session] WHERE [Key] = @Key AND DATEDIFF(s, [LastSeen], GETDATE()) < @InactiveLimit)
+IF NOT EXISTS (SELECT 1 FROM [Session] WHERE [Key] = @Key)
 	INSERT INTO [Session] ([Key], [Addr], [UserAgent])
 		VALUES (@Key, @Addr, @UserAgent);
 ELSE

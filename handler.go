@@ -37,11 +37,11 @@ func HandleInfo(w http.ResponseWriter, r *http.Request) {
 		httpError(w, err, http.StatusInternalServerError)
 		return
 	}
-	viewers, err := SessionCount(db)
+	/*viewers, err := SessionCount(db)
 	if err != nil {
 		httpError(w, err, http.StatusInternalServerError)
 		return
-	}
+	}*/
 	/*meta, err := MetadataDisplayList(db)
 	if err != nil {
 		httpError(w, err, http.StatusInternalServerError)
@@ -52,7 +52,7 @@ func HandleInfo(w http.ResponseWriter, r *http.Request) {
 		Viewers int64                    `json:"viewers"`
 		Meta    map[string]MetadataValue `json:"meta"`
 	}{
-		Viewers: viewers,
+		Viewers: 0,
 		Meta:    meta,
 	}
 	json.NewEncoder(w).Encode(info)

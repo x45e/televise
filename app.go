@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
+	"time"
 
 	// DB driver
 	_ "github.com/denisenkom/go-mssqldb"
@@ -48,6 +49,20 @@ func Start(cfg Config) (*App, error) {
 		srv: &http.Server{Addr: cfg.Addr},
 		db:  db,
 	}
+
+	var viewers int64
+
+	go func(db *sql.DB, viewers *int64) {
+		for {
+			n, err := SessionCount(db)
+			if err == nil {
+				*viewers = n
+			}
+			time.Sleep(10 * time.Second)
+		}
+	}(db, &viewers)
+
+	ctx = context.WithValue(ctx, KeyCount, &viewers)
 
 	app.RegisterRoutes(ctx)
 

@@ -37,6 +37,14 @@ func HandleInfo(w http.ResponseWriter, r *http.Request) {
 		httpError(w, err, http.StatusInternalServerError)
 		return
 	}
+	count := r.Context().Value(KeyCount)
+	viewers := int64(0)
+	if count != nil {
+		n := r.Context().Value(KeyCount).(*int64)
+		if n != nil {
+			viewers = *n
+		}
+	}
 	/*viewers, err := SessionCount(db)
 	if err != nil {
 		httpError(w, err, http.StatusInternalServerError)
@@ -52,7 +60,7 @@ func HandleInfo(w http.ResponseWriter, r *http.Request) {
 		Viewers int64                    `json:"viewers"`
 		Meta    map[string]MetadataValue `json:"meta"`
 	}{
-		Viewers: 0,
+		Viewers: viewers,
 		Meta:    meta,
 	}
 	json.NewEncoder(w).Encode(info)

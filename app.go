@@ -51,18 +51,30 @@ func Start(cfg Config) (*App, error) {
 	}
 
 	var viewers int64
+	var title string
 
-	go func(db *sql.DB, viewers *int64) {
+	go func(db *sql.DB, viewers *int64, title *string) {
 		for {
 			n, err := SessionCount(db)
 			if err == nil {
 				*viewers = n
 			}
+			meta, err := MetadataDisplayList(db)
+			if err == nil {
+				if m, ok := meta["movie"]; ok {
+					var v string
+					if m.Value != nil {
+						v = *m.Value
+					}
+					*title = v
+				}
+			}
 			time.Sleep(10 * time.Second)
 		}
-	}(db, &viewers)
+	}(db, &viewers, &title)
 
 	ctx = context.WithValue(ctx, KeyCount, &viewers)
+	ctx = context.WithValue(ctx, KeyTitle, &title)
 
 	app.RegisterRoutes(ctx)
 

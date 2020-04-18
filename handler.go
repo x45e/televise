@@ -45,6 +45,14 @@ func HandleInfo(w http.ResponseWriter, r *http.Request) {
 			viewers = *n
 		}
 	}
+	ctxtitle := r.Context().Value(KeyTitle)
+	title := ""
+	if ctxtitle != nil {
+		v := r.Context().Value(KeyTitle).(*string)
+		if v != nil {
+			title = *v
+		}
+	}
 	/*viewers, err := SessionCount(db)
 	if err != nil {
 		httpError(w, err, http.StatusInternalServerError)
@@ -56,6 +64,7 @@ func HandleInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}*/
 	meta := make(map[string]MetadataValue)
+	meta["movie"] = MetadataValue{Value: &title}
 	info := struct {
 		Viewers int64                    `json:"viewers"`
 		Meta    map[string]MetadataValue `json:"meta"`

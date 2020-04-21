@@ -1,12 +1,15 @@
 package televise
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"os"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/gocql/gocql"
 )
 
 const NilSnowflake Snowflake = 0
@@ -114,6 +117,20 @@ func (s *Snowflake) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+	*s = Snowflake(n)
+	return nil
+}
+
+// MarshalCQL implements gocql.Marshaler
+func (s Snowflake) MarshalCQL(info gocql.TypeInfo) (b []byte, err error) {
+	b = make([]byte, 8)
+	binary.BigEndian.PutUint64(b, uint64(s))
+	return b, nil
+}
+
+// UnmarshalCQL implements gocql.Unmarshaler
+func (s *Snowflake) UnmarshalCQL(info gocql.TypeInfo, data []byte) error {
+	n := binary.BigEndian.Uint64(data)
 	*s = Snowflake(n)
 	return nil
 }

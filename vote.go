@@ -1,81 +1,54 @@
 package televise
 
 import (
-	"context"
-	"database/sql"
+	"github.com/gocql/gocql"
 )
 
 const (
-	sqlCreateOptionTable = `
-CREATE TABLE [Option] (
-	[Id] BIGINT IDENTITY(1, 1) PRIMARY KEY NOT NULL,
-	[Title] VARCHAR(4096) NOT NULL
-);`
-	sqlDropOptionTable = `DROP TABLE [Option];`
+	queryOptionCreateTable = `
+		CREATE TABLE option (
+			id bigint PRIMARY KEY,
+			title text
+		);`
+	queryOptionDropTable = `DROP TABLE option;`
+	queryOptionList      = `SELECT id, title FROM option;`
+	queryOptionInsert    = `INSERT INTO option (id, title) VALUES (?, ?);`
 
-	sqlOptionInsert = `INSERT INTO [Option] ([Title]) OUTPUT INSERTED.[Id] VALUES (@Title);`
-
-	sqlCreateVoteTable = `
-CREATE TABLE [Vote] (
-	[Key] BINARY(20) NOT NULL,
-	[OptionId] BIGINT NOT NULL FOREIGN KEY REFERENCES [Option]([Id]),
-	[At] DATETIME NOT NULL DEFAULT GETDATE()
-);
-ALTER TABLE [Vote] ADD CONSTRAINT [PK_Vote] PRIMARY KEY ([Key], [OptionId]);`
-
-	sqlDropVoteTable = `DROP TABLE [Vote];`
-
-	sqlVoteInsert = `INSERT INTO [Vote] ([Key], [OptionId]) VALUES (@Key, @OptionId);`
-
-	sqlLastVoteResults = `
-	SELECT TOP 1 op.[Title], COUNT([Key])
-	FROM [Vote] AS v
-JOIN [Option] AS op
-	ON op.[Id] = v.[OptionId]
-	GROUP BY op.[Title], op.[Id]
-	ORDER BY op.[Id] DESC;`
+	queryVoteCreateTable = `
+		CREATE TABLE vote (
+			id bigint,
+			option_id bigint,
+			at timeuuid,
+			PRIMARY KEY (id, option_id)
+		);`
+	queryVoteDropTable = `DROP TABLE vote;`
+	queryVoteInsert    = `INSERT INTO vote (id, option_id, at) VALUES (?, ?, now());`
 )
 
-func InsertOption(db *sql.DB, title string) (id int64, err error) {
-	ctx := context.Background()
-	stmt, err := db.PrepareContext(ctx, sqlOptionInsert)
-	if err != nil {
-		return -1, err
+func ListOptions(db *gocql.Session) (list map[Snowflake]string, err error) {
+	it := db.Query(queryOptionList).Iter()
+	m := map[string]interface{}{}
+	list = map[Snowflake]string{}
+	for it.MapScan(m) {
+		list[m["id"].(Snowflake)] = m["title"].(string)
+		m = map[string]interface{}{}
 	}
-	row := stmt.QueryRowContext(
-		ctx,
-		sql.Named("Title", title),
-	)
-	err = row.Scan(&id)
+	return list, nil
+}
+
+func InsertOption(sf *snowflaker, db *gocql.Session, title string) (id Snowflake, err error) {
+	id = sf.next()
+	err = db.Query(queryOptionInsert, id, title).Exec()
 	if err != nil {
-		return -1, err
+		return NilSnowflake, err
 	}
 	return id, nil
 }
 
-func CastVote(db *sql.DB, key []byte, optionId int64) error {
-	ctx := context.Background()
-	stmt, err := db.PrepareContext(ctx, sqlVoteInsert)
-	if err != nil {
-		return err
-	}
-	_, err = stmt.ExecContext(
-		ctx,
-		sql.Named("Key", key),
-		sql.Named("OptionId", optionId),
-	)
+func CastVote(db *gocql.Session, id *Identity, optionId Snowflake) error {
+	err := db.Query(queryVoteInsert, id.ID, optionId).Exec()
 	if err != nil {
 		return err
 	}
 	return nil
-}
-
-func LastVote(db *sql.DB) (title string, votes int64, err error) {
-	ctx := context.Background()
-	stmt, err := db.PrepareContext(ctx, sqlLastVoteResults)
-	if err != nil {
-		return "", -1, err
-	}
-	err = stmt.QueryRowContext(ctx).Scan(&title, &votes)
-	return title, votes, err
 }

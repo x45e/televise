@@ -129,6 +129,7 @@ func HandleCastVote(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 */
+
 func HandleViewers(w http.ResponseWriter, r *http.Request) {
 	db := r.Context().Value(KeyDB).(*gocql.Session)
 	n, err := VisitorCount(db)
@@ -137,24 +138,4 @@ func HandleViewers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fmt.Fprint(w, n)
-}
-
-func HandleLastResults(w http.ResponseWriter, r *http.Request) {
-	db := r.Context().Value(KeyDB).(*sql.DB)
-	title, votes, err := LastVote(db)
-	if err != nil {
-		httpError(w, err, http.StatusInternalServerError)
-		return
-	}
-	err = json.NewEncoder(w).Encode(struct {
-		Title string `json:"title"`
-		Votes int64  `json:"votes"`
-	}{
-		Title: title,
-		Votes: votes,
-	})
-	if err != nil {
-		httpError(w, err, http.StatusInternalServerError)
-		return
-	}
 }

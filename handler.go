@@ -2,7 +2,6 @@ package televise
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -103,7 +102,7 @@ func HandleManifest(w http.ResponseWriter, r *http.Request) {
 	val, err := MetadataGet(db, "manifest")
 	if err != nil {
 		// silently report error by not printing any text
-		if err == sql.ErrNoRows {
+		if err == gocql.ErrNotFound {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}

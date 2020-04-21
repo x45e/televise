@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"time"
 
-	// DB driver
-	_ "github.com/denisenkom/go-mssqldb"
 	"github.com/gocql/gocql"
 )
 

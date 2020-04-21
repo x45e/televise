@@ -1,133 +1,96 @@
 package televise
 
 import (
-	"context"
-	"crypto/sha1"
-	"database/sql"
 	"errors"
 	"net"
 	"net/http"
-	"time"
+
+	"github.com/gocql/gocql"
 )
 
 const (
-	sqlCreateSessionTable = `
-CREATE TABLE [Session]
-(
-	[Key] BINARY(20) NOT NULL,
-	[Addr] VARCHAR(39) NOT NULL,
-	[UserAgent] VARCHAR(1024),
-	[Start] DATETIME NOT NULL DEFAULT GETDATE(),
-	[LastSeen] DATETIME NOT NULL DEFAULT GETDATE()
-);
-ALTER TABLE [Session] ADD CONSTRAINT [PK_Session] PRIMARY KEY ([Key], [Start]);`
-	sqlDropSessionTable = `DROP TABLE [Session];`
+	querySessionCreateTable = `
+		CREATE TABLE session (
+			id bigint PRIMARY KEY,
+			addr text,
+			user_agent text
+		);`
+	querySessionDropTable = `DROP TABLE session;`
+	querySessionInsert    = `INSERT INTO session (id, addr, user_agent) VALUES (?, ?, ?)`
 
-	sqlUpdateSession = `
-IF NOT EXISTS (SELECT 1 FROM [Session] WHERE [Key] = @Key)
-	INSERT INTO [Session] ([Key], [Addr], [UserAgent])
-		VALUES (@Key, @Addr, @UserAgent);
-ELSE
-	UPDATE TOP (1) [Session]
-		SET [LastSeen] = GETDATE()
-	WHERE [Key] IN
-		(SELECT TOP (1) [Key] FROM [Session] WHERE [Key] = @Key ORDER BY [LastSeen] DESC);`
-
-	sqlFetchSession = `
-SELECT TOP (1) [Key], [Start], [LastSeen] FROM [Session]
-WHERE [Key] = @Key ORDER BY [LastSeen] DESC;`
-
-	InactiveSessionLimit = 25 * time.Second
+	queryVisitCreateTable = `
+		CREATE TABLE visit (
+			id bigint,
+			ts timeuuid,
+			PRIMARY KEY(id, ts)
+		) WITH CLUSTERING ORDER BY (ts DESC);`
+	queryVisitDropTable = `DROP TABLE visit;`
+	queryVisitInsert    = `INSERT INTO visit (id, ts) VALUES (?, now());`
+	queryVisitCount     = `SELECT COUNT(id) FROM visit WHERE ts > minTimeuuid(currentTime() - 25s)`
 )
 
 type Identity struct {
-	Key       []byte `json:"key,string"`
-	Addr      string `json:"-"`
-	UserAgent string `json:"-"`
+	ID        Snowflake `json:"id,string"`
+	Addr      string    `json:"-"`
+	UserAgent string    `json:"-"`
 }
 
-func NewIdentity(r *http.Request) *Identity {
-	addr := r.Header.Get("X-Forwarded-For")
-	if addr == "" {
-		addr = r.RemoteAddr
+func (n *Identity) fromRequest(r *http.Request) {
+	n.Addr = r.Header.Get("X-Forwarded-For")
+	if n.Addr == "" {
+		n.Addr = r.RemoteAddr
 	}
-	// ignore port
-	host, _, err := net.SplitHostPort(addr)
-	if err != nil {
-		host = addr
+	addr, _, err := net.SplitHostPort(n.Addr)
+	if err == nil {
+		n.Addr = addr
 	}
-	h := sha1.New()
-	h.Write([]byte(addr))
-	h.Write([]byte(r.UserAgent()))
-	return &Identity{
-		Key:       h.Sum(nil),
-		Addr:      host,
-		UserAgent: r.UserAgent(),
-	}
+	n.UserAgent = r.UserAgent()
 }
 
-type Session struct {
-	Identity
-	Start    time.Time `json:"start"`
-	LastSeen time.Time `json:"lastSeen"`
+func NewIdentity(sf *snowflaker, r *http.Request) *Identity {
+	n := &Identity{}
+	n.fromRequest(r)
+	n.ID = sf.next()
+	return n
 }
 
-func CreateOrUpdateSession(db *sql.DB, id *Identity) (*Session, error) {
+func FindIdentity(r *http.Request) *Identity {
+	id := ParseSnowflake(r.URL.Query().Get("id"))
+	if id == NilSnowflake {
+		return nil
+	}
+	n := &Identity{
+		ID: id,
+	}
+	n.fromRequest(r)
+	return n
+}
+
+func CreateSession(db *gocql.Session, id *Identity) error {
 	if db == nil {
-		return nil, errors.New("db nil")
+		return errors.New("db nil")
 	}
-	if id == nil || id.Key == nil {
-		return nil, errors.New("identity invalid")
+	if id == nil || id.ID == NilSnowflake {
+		return errors.New("identity invalid")
 	}
-	ctx := context.Background()
-	stmt, err := db.PrepareContext(ctx, sqlUpdateSession)
-	if err != nil {
-		return nil, err
-	}
-	_, err = stmt.ExecContext(
-		ctx,
-		sql.Named("Key", id.Key),
-		sql.Named("Addr", id.Addr),
-		sql.Named("UserAgent", id.UserAgent),
-		sql.Named("InactiveLimit", InactiveSessionLimit/time.Second),
-	)
-	if err != nil {
-		return nil, err
-	}
-	stmt, err = db.PrepareContext(ctx, sqlFetchSession)
-	if err != nil {
-		return nil, err
-	}
-	row := stmt.QueryRowContext(
-		ctx,
-		sql.Named("Key", id.Key),
-	)
-	s := &Session{}
-	err = row.Scan(&s.Key, &s.Start, &s.LastSeen)
-	if err != nil {
-		return nil, err
-	}
-	return s, nil
+	return db.Query(querySessionInsert, id.ID, id.Addr, id.UserAgent).Exec()
 }
 
-// SessionCount returns the current number of active connections.
-func SessionCount(db *sql.DB) (n int64, err error) {
+func LogVisit(db *gocql.Session, id *Identity) error {
+	if db == nil {
+		return errors.New("db nil")
+	}
+	if id == nil || id.ID == NilSnowflake {
+		return errors.New("identity invalid")
+	}
+	return db.Query(queryVisitInsert, id.ID).Exec()
+}
+
+// VisitorCount returns the current number of active visitors.
+func VisitorCount(db *gocql.Session) (n int64, err error) {
 	if db == nil {
 		return -1, errors.New("db nil")
 	}
-	ctx := context.Background()
-	tsql := `SELECT COUNT([Key]) FROM [Session] WHERE DATEDIFF(s, [LastSeen], GETDATE()) < @InactiveLimit;`
-	stmt, err := db.PrepareContext(ctx, tsql)
-	if err != nil {
-		return -1, err
-	}
-	row := stmt.QueryRowContext(
-		ctx,
-		sql.Named("InactiveLimit", InactiveSessionLimit/time.Second),
-	)
-	err = row.Scan(&n)
-	if err != nil {
-		return -1, err
-	}
-	return n, nil
+	err = db.Query(queryVisitCount).Scan(&n)
+	return n, err
 }

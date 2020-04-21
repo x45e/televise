@@ -1,9 +1,9 @@
 package televise
 
 import (
-	"context"
-	"database/sql"
 	"log"
+
+	"github.com/gocql/gocql"
 )
 
 type Migration struct {
@@ -12,45 +12,30 @@ type Migration struct {
 	Reverse string
 }
 
-func (m Migration) Do(ctx context.Context, db *sql.DB) error { return execSQL(ctx, db, m.Forward) }
+func (m Migration) Do(db *gocql.Session) error {
+	return db.Query(m.Forward).Exec()
+}
 
-func (m Migration) Undo(ctx context.Context, db *sql.DB) error { return execSQL(ctx, db, m.Reverse) }
-
-func execSQL(ctx context.Context, db *sql.DB, tsql string) error {
-	stmt, err := db.PrepareContext(ctx, tsql)
-	if err != nil {
-		return err
-	}
-	_, err = stmt.ExecContext(ctx)
-	return err
+func (m Migration) Undo(db *gocql.Session) error {
+	return db.Query(m.Reverse).Exec()
 }
 
 const (
-	sqlCreateMigrationTable = `
-IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='Migration' and xtype='U')
-	CREATE TABLE Migration (
-		Name VARCHAR(255) PRIMARY KEY NOT NULL
-	);`
-	sqlLastMigration = `SELECT COUNT(Name) FROM Migration;`
-	sqlLogMigration  = `INSERT INTO Migration (Name) VALUES (@Name);`
+	sqlMigrationCreateTable = `
+		CREATE TABLE IF NOT EXISTS migration (
+			name text PRIMARY KEY
+		);`
+	sqlMigrationCount  = `SELECT COUNT(name) FROM migration;`
+	sqlMigrationCommit = `INSERT INTO migration (name) VALUES (?);`
 )
 
-func Migrate(db *sql.DB) error {
-	ctx := context.Background()
-	stmt, err := db.PrepareContext(ctx, sqlCreateMigrationTable)
-	if err != nil {
-		return err
-	}
-	_, err = stmt.ExecContext(ctx)
-	if err != nil {
-		return err
-	}
-	stmt, err = db.PrepareContext(ctx, sqlLastMigration)
+func Migrate(db *gocql.Session) error {
+	err := db.Query(sqlMigrationCreateTable).Exec()
 	if err != nil {
 		return err
 	}
 	var last int
-	err = stmt.QueryRowContext(ctx).Scan(&last)
+	err = db.Query(sqlMigrationCount).Scan(&last)
 	if err != nil {
 		return err
 	}
@@ -61,18 +46,13 @@ func Migrate(db *sql.DB) error {
 	for i := last; i < len(migrations); i++ {
 		m := migrations[i]
 		log.Println("Running migration", m.Name)
-		err = m.Do(ctx, db)
+		err = m.Do(db)
 		if err != nil {
 			return err
 		}
-		stmt, err = db.PrepareContext(ctx, sqlLogMigration)
+		err = db.Query(sqlMigrationCommit, m.Name).Exec()
 		if err != nil {
-			return err
-		}
-		_, err = stmt.ExecContext(ctx, sql.Named("Name", m.Name))
-		if err != nil {
-			// try to undo the migration, ignore any errors
-			m.Undo(ctx, db)
+			m.Undo(db)
 			return err
 		}
 	}
@@ -80,8 +60,7 @@ func Migrate(db *sql.DB) error {
 }
 
 var migrations = []Migration{
-	{"2020-04-11-CreateSession", sqlCreateSessionTable, sqlDropSessionTable},
-	{"2020-04-13-CreateMetadata", sqlMetadataTable, sqlMetadataDropTable},
-	{"2020-04-14-CreateOption", sqlCreateOptionTable, sqlDropOptionTable},
-	{"2020-04-14-CreateVote", sqlCreateVoteTable, sqlDropVoteTable},
+	{"2020-04-20-CreateSession", querySessionCreateTable, querySessionDropTable},
+	{"2020-04-20-CreateVisit", queryVisitCreateTable, queryVisitDropTable},
+	{"2020-04-20-CreateMetadata", queryMetadataCreateTable, queryMetadataDropTable},
 }

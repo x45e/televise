@@ -1,100 +1,50 @@
 package televise
 
 import (
-	"database/sql"
 	"time"
 
-	"golang.org/x/net/context"
+	"github.com/gocql/gocql"
 )
 
-var displayKeys = []string{
-	"movie",
-	"movie_id",
-}
-
 const (
-	sqlMetadataTable = `
-CREATE TABLE [Metadata] (
-	[Key] VARCHAR(255) PRIMARY KEY NOT NULL,
-	[Value] VARCHAR(4096),
-	[Created] DATETIME NOT NULL DEFAULT GETDATE(),
-	[Updated] DATETIME NOT NULL DEFAULT GETDATE(),
-	[Display] BIT DEFAULT 'FALSE'
-);`
-	sqlMetadataDropTable = `DROP TABLE [Metadata];`
-
-	sqlMetadataGet = `SELECT [Value] FROM [Metadata] WHERE [Key] = @Key;`
-
-	sqlMetadataUpsert = `
-IF NOT EXISTS (SELECT 1 FROM [Metadata] WHERE [Key] = @Key)
-	INSERT INTO [Metadata] ([Key], [Value], [Display]) VALUES (@Key, @Value, @Display)
-ELSE
-	UPDATE [Metadata] SET [Value] = @Value, [Updated] = GETDATE() WHERE [Key] = @Key`
-	sqlMetadataDisplayValues = `SELECT [Key], [Value], [Updated] FROM [Metadata] WHERE [Display] = 1;`
+	queryMetadataCreateTable = `
+		CREATE TABLE metadata (
+			name text PRIMARY KEY,
+			value text,
+			updated timestamp
+		);`
+	queryMetadataDropTable = `DROP TABLE metadata;`
+	queryMetadataList      = `SELECT name, value, updated FROM metadata;`
+	queryMetadataGet       = `SELECT value FROM metadata WHERE name = ?;`
+	queryMetadataSet       = `UPDATE metadata SET value = ?, updated = now() WHERE name = ?;`
+	queryMetadataDelete    = `DELETE FROM metadata WHERE name = ?;`
 )
 
 type MetadataValue struct {
-	Value   *string   `json:"value"`
+	Value   string    `json:"value"`
 	Updated time.Time `json:"updated"`
 }
 
-func MetadataDisplayList(db *sql.DB) (m map[string]MetadataValue, err error) {
-	ctx := context.Background()
-	stmt, err := db.PrepareContext(ctx, sqlMetadataDisplayValues)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := stmt.QueryContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	m = make(map[string]MetadataValue)
-	for rows.Next() {
-		var key string
-		var val MetadataValue
-		err = rows.Scan(&key, &val.Value, &val.Updated)
-		if err != nil {
-			return nil, err
+func MetadataDisplayList(db *gocql.Session) (list map[string]MetadataValue, err error) {
+	it := db.Query(queryMetadataList).Iter()
+	m := map[string]interface{}{}
+	list = map[string]MetadataValue{}
+	for it.MapScan(m) {
+		v := MetadataValue{
+			Value:   m["value"].(string),
+			Updated: m["updated"].(time.Time),
 		}
-		m[key] = val
+		list[m["name"].(string)] = v
+		m = map[string]interface{}{}
 	}
-	return m, nil
+	return list, nil
 }
 
-func MetadataGet(db *sql.DB, key string) (val *string, err error) {
-	ctx := context.Background()
-	stmt, err := db.PrepareContext(ctx, sqlMetadataGet)
-	if err != nil {
-		return nil, err
-	}
-	err = stmt.QueryRowContext(ctx, sql.Named("Key", key)).Scan(&val)
-	if err != nil {
-		return nil, err
-	}
-	return val, nil
+func MetadataGet(db *gocql.Session, key string) (val string, err error) {
+	err = db.Query(queryMetadataGet, key).Scan(&val)
+	return val, err
 }
 
-func MetadataSet(db *sql.DB, key string, value *string) (err error) {
-	display := false
-	for _, k := range displayKeys {
-		if k == key {
-			display = true
-			break
-		}
-	}
-	ctx := context.Background()
-	stmt, err := db.PrepareContext(ctx, sqlMetadataUpsert)
-	if err != nil {
-		return err
-	}
-	_, err = stmt.ExecContext(
-		ctx,
-		sql.Named("Key", key),
-		sql.Named("Value", value),
-		sql.Named("Display", display),
-	)
-	if err != nil {
-		return err
-	}
-	return nil
+func MetadataSet(db *gocql.Session, key string, value string) (err error) {
+	return db.Query(queryMetadataSet, key, value).Exec()
 }

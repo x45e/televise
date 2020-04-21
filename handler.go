@@ -7,7 +7,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strconv"
+
+	"github.com/gocql/gocql"
 )
 
 type contextKey int
@@ -29,14 +30,27 @@ func withContext(ctx context.Context, next http.Handler) http.Handler {
 	})
 }
 
-func HandleInfo(w http.ResponseWriter, r *http.Request) {
-	db := r.Context().Value(KeyDB).(*sql.DB)
-	id := NewIdentity(r)
-	_, err := CreateOrUpdateSession(db, id)
+type sessionData struct {
+	ID Snowflake `json:"id"`
+}
+
+func HandleSession(w http.ResponseWriter, r *http.Request) {
+	sf := r.Context().Value(KeySnowflaker).(*snowflaker)
+	db := r.Context().Value(KeyDB).(*gocql.Session)
+	id := NewIdentity(sf, r)
+	err := CreateSession(db, id)
 	if err != nil {
 		httpError(w, err, http.StatusInternalServerError)
 		return
 	}
+	json.NewEncoder(w).Encode(sessionData{ID: id.ID})
+}
+
+/*
+func HandleInfo(w http.ResponseWriter, r *http.Request) {
+	db := r.Context().Value(KeyDB).(*gocql.Session)
+	id := FindIdentity(r)
+	go LogVisit(db, id)
 	count := r.Context().Value(KeyCount)
 	viewers := int64(0)
 	if count != nil {
@@ -53,16 +67,6 @@ func HandleInfo(w http.ResponseWriter, r *http.Request) {
 			title = *v
 		}
 	}
-	/*viewers, err := SessionCount(db)
-	if err != nil {
-		httpError(w, err, http.StatusInternalServerError)
-		return
-	}*/
-	/*meta, err := MetadataDisplayList(db)
-	if err != nil {
-		httpError(w, err, http.StatusInternalServerError)
-		return
-	}*/
 	meta := make(map[string]MetadataValue)
 	meta["movie"] = MetadataValue{Value: &title}
 	info := struct {
@@ -73,7 +77,7 @@ func HandleInfo(w http.ResponseWriter, r *http.Request) {
 		Meta:    meta,
 	}
 	json.NewEncoder(w).Encode(info)
-}
+}*/
 
 func MetadataUpdate(w http.ResponseWriter, r *http.Request) {
 	k := r.URL.Query().Get("k")
@@ -82,51 +86,34 @@ func MetadataUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	v := r.URL.Query().Get("v")
-	var val *string
 	if v == "" {
-		val = nil
-	} else {
-		val = &v
+		httpError(w, nil, http.StatusBadRequest)
+		return
 	}
-	db := r.Context().Value(KeyDB).(*sql.DB)
-	err := MetadataSet(db, k, val)
+	db := r.Context().Value(KeyDB).(*gocql.Session)
+	err := MetadataSet(db, k, v)
 	if err != nil {
 		httpError(w, err, http.StatusInternalServerError)
 		return
-	}
-	if r.URL.Query().Get("poll") == "true" && val != nil {
-		id, err := InsertOption(db, *val)
-		if err != nil {
-			httpError(w, err, http.StatusInternalServerError)
-			return
-		}
-		val := strconv.FormatInt(id, 10)
-		err = MetadataSet(db, k+"_id", &val)
-		if err != nil {
-			httpError(w, err, http.StatusInternalServerError)
-			return
-		}
 	}
 }
 
 func HandleManifest(w http.ResponseWriter, r *http.Request) {
-	db := r.Context().Value(KeyDB).(*sql.DB)
+	db := r.Context().Value(KeyDB).(*gocql.Session)
 	val, err := MetadataGet(db, "manifest")
 	if err != nil {
+		// silently report error by not printing any text
 		if err == sql.ErrNoRows {
-			httpError(w, nil, http.StatusNotFound)
+			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		httpError(w, err, http.StatusInternalServerError)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if val == nil {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-	fmt.Fprint(w, *val)
+	fmt.Fprint(w, val)
 }
 
+/*
 func HandleCastVote(w http.ResponseWriter, r *http.Request) {
 	db := r.Context().Value(KeyDB).(*sql.DB)
 	id, err := strconv.ParseInt(r.URL.Query().Get("id"), 10, 64)
@@ -141,10 +128,10 @@ func HandleCastVote(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 }
-
+*/
 func HandleViewers(w http.ResponseWriter, r *http.Request) {
-	db := r.Context().Value(KeyDB).(*sql.DB)
-	n, err := SessionCount(db)
+	db := r.Context().Value(KeyDB).(*gocql.Session)
+	n, err := VisitorCount(db)
 	if err != nil {
 		httpError(w, err, http.StatusInternalServerError)
 		return

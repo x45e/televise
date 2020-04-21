@@ -12,7 +12,6 @@ import (
 func main() {
 	flag.Parse()
 
-	db := os.Getenv("TELEVISE_DB")
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -21,7 +20,11 @@ func main() {
 
 	cfg := televise.Config{
 		Addr: addr,
-		DB:   db,
+		DB: televise.DBConfig{
+			Addr:     os.Getenv("TELEVISE_CASSANDRA_ADDR"),
+			Username: os.Getenv("TELEVISE_CASSANDRA_USER"),
+			Password: os.Getenv("TELEVISE_CASSANDRA_PASSWORD"),
+		},
 	}
 
 	app, err := televise.Start(cfg)

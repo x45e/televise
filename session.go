@@ -3,45 +3,27 @@ package televise
 import (
 	"context"
 	"crypto/sha1"
-	"database/sql"
+	"encoding/hex"
 	"errors"
 	"net"
 	"net/http"
+	"strconv"
 	"time"
+
+	"github.com/go-redis/redis/v8"
 )
 
 const (
-	sqlCreateSessionTable = `
-CREATE TABLE [Session]
-(
-	[Key] BINARY(20) NOT NULL,
-	[Addr] VARCHAR(39) NOT NULL,
-	[UserAgent] VARCHAR(1024),
-	[Start] DATETIME NOT NULL DEFAULT GETDATE(),
-	[LastSeen] DATETIME NOT NULL DEFAULT GETDATE()
-);
-ALTER TABLE [Session] ADD CONSTRAINT [PK_Session] PRIMARY KEY ([Key], [Start]);`
-	sqlDropSessionTable = `DROP TABLE [Session];`
+	redisKeySession = "session"
+	redisKeyVisit   = "visit"
+	redisTimeout    = time.Second
 
-	sqlUpdateSession = `
-IF NOT EXISTS (SELECT 1 FROM [Session] WHERE [Key] = @Key)
-	INSERT INTO [Session] ([Key], [Addr], [UserAgent])
-		VALUES (@Key, @Addr, @UserAgent);
-ELSE
-	UPDATE TOP (1) [Session]
-		SET [LastSeen] = GETDATE()
-	WHERE [Key] IN
-		(SELECT TOP (1) [Key] FROM [Session] WHERE [Key] = @Key ORDER BY [LastSeen] DESC);`
-
-	sqlFetchSession = `
-SELECT TOP (1) [Key], [Start], [LastSeen] FROM [Session]
-WHERE [Key] = @Key ORDER BY [LastSeen] DESC;`
-
-	InactiveSessionLimit = 25 * time.Second
+	sessionCountPeriod  = 10 * time.Second
+	maxSessionRetention = 30 * time.Second
 )
 
 type Identity struct {
-	Key       []byte `json:"key,string"`
+	Key       string `json:"key"`
 	Addr      string `json:"-"`
 	UserAgent string `json:"-"`
 }
@@ -60,74 +42,59 @@ func NewIdentity(r *http.Request) *Identity {
 	h.Write([]byte(addr))
 	h.Write([]byte(r.UserAgent()))
 	return &Identity{
-		Key:       h.Sum(nil),
+		Key:       hex.EncodeToString(h.Sum(nil)),
 		Addr:      host,
 		UserAgent: r.UserAgent(),
 	}
 }
 
-type Session struct {
-	Identity
-	Start    time.Time `json:"start"`
-	LastSeen time.Time `json:"lastSeen"`
+func (id Identity) Register(c *redis.Client) error {
+	if c == nil {
+		return errors.New("client nil")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), redisTimeout)
+	defer cancel()
+	return c.HSet(ctx, redisKeySession, id.Key, id.Addr+"|"+id.UserAgent).Err()
 }
 
-func CreateOrUpdateSession(db *sql.DB, id *Identity) (*Session, error) {
-	if db == nil {
-		return nil, errors.New("db nil")
+func (id Identity) LogVisit(c *redis.Client) error {
+	if c == nil {
+		return errors.New("client nil")
 	}
-	if id == nil || id.Key == nil {
-		return nil, errors.New("identity invalid")
+	if id.Key == "" || len(id.Key) > 64 {
+		return errors.New("key invalid")
 	}
-	ctx := context.Background()
-	stmt, err := db.PrepareContext(ctx, sqlUpdateSession)
+	now := time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), redisTimeout)
+	defer cancel()
+	err := c.ZAdd(ctx, redisKeyVisit, &redis.Z{Score: float64(now.UnixNano()), Member: id.Key}).Err()
 	if err != nil {
-		return nil, err
+		return err
 	}
-	_, err = stmt.ExecContext(
-		ctx,
-		sql.Named("Key", id.Key),
-		sql.Named("Addr", id.Addr),
-		sql.Named("UserAgent", id.UserAgent),
-		sql.Named("InactiveLimit", InactiveSessionLimit/time.Second),
-	)
-	if err != nil {
-		return nil, err
-	}
-	stmt, err = db.PrepareContext(ctx, sqlFetchSession)
-	if err != nil {
-		return nil, err
-	}
-	row := stmt.QueryRowContext(
-		ctx,
-		sql.Named("Key", id.Key),
-	)
-	s := &Session{}
-	err = row.Scan(&s.Key, &s.Start, &s.LastSeen)
-	if err != nil {
-		return nil, err
-	}
-	return s, nil
+	return nil
 }
 
 // SessionCount returns the current number of active connections.
-func SessionCount(db *sql.DB) (n int64, err error) {
-	if db == nil {
-		return -1, errors.New("db nil")
+func SessionCount(c *redis.Client) (n int64, err error) {
+	if c == nil {
+		return -1, errors.New("client nil")
 	}
-	ctx := context.Background()
-	tsql := `SELECT COUNT([Key]) FROM [Session] WHERE DATEDIFF(s, [LastSeen], GETDATE()) < @InactiveLimit;`
-	stmt, err := db.PrepareContext(ctx, tsql)
-	if err != nil {
-		return -1, err
-	}
-	row := stmt.QueryRowContext(
-		ctx,
-		sql.Named("InactiveLimit", InactiveSessionLimit/time.Second),
-	)
-	err = row.Scan(&n)
+	start := time.Now().Add(-sessionCountPeriod).UnixNano()
+	ctx, cancel := context.WithTimeout(context.Background(), redisTimeout)
+	defer cancel()
+	n, err = c.ZCount(ctx, redisKeyVisit, strconv.Itoa(int(start)), "+inf").Result()
 	if err != nil {
 		return -1, err
 	}
 	return n, nil
+}
+
+func PruneSessions(c *redis.Client) error {
+	if c == nil {
+		return errors.New("client nil")
+	}
+	start := time.Now().Add(-maxSessionRetention).UnixNano()
+	ctx, cancel := context.WithTimeout(context.Background(), redisTimeout)
+	defer cancel()
+	return c.ZRemRangeByScore(ctx, redisKeyVisit, "-inf", strconv.FormatInt(start, 10)).Err()
 }

@@ -80,8 +80,8 @@ func Migrate(db *sql.DB) error {
 }
 
 var migrations = []Migration{
-	{"2020-04-11-CreateSession", sqlCreateSessionTable, sqlDropSessionTable},
-	{"2020-04-13-CreateMetadata", sqlMetadataTable, sqlMetadataDropTable},
-	{"2020-04-14-CreateOption", sqlCreateOptionTable, sqlDropOptionTable},
-	{"2020-04-14-CreateVote", sqlCreateVoteTable, sqlDropVoteTable},
+	//{"2020-04-11-CreateSession", sqlCreateSessionTable, sqlDropSessionTable},
+	//{"2020-04-13-CreateMetadata", sqlMetadataTable, sqlMetadataDropTable},
+	//{"2020-04-14-CreateOption", sqlCreateOptionTable, sqlDropOptionTable},
+	//{"2020-04-14-CreateVote", sqlCreateVoteTable, sqlDropVoteTable},
 }

@@ -12,7 +12,6 @@ import (
 func main() {
 	flag.Parse()
 
-	db := os.Getenv("TELEVISE_DB")
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -20,8 +19,9 @@ func main() {
 	addr := ":" + port
 
 	cfg := televise.Config{
-		Addr: addr,
-		DB:   db,
+		Addr:          addr,
+		RedisAddr:     os.Getenv("REDIS_ADDR"),
+		RedisPassword: os.Getenv("REDIS_PASS"),
 	}
 
 	app, err := televise.Start(cfg)

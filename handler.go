@@ -2,12 +2,11 @@ package televise
 
 import (
 	"context"
-	"database/sql"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
-	"strconv"
+
+	"github.com/go-redis/redis/v8"
 )
 
 type contextKey int
@@ -29,6 +28,7 @@ func withContext(ctx context.Context, next http.Handler) http.Handler {
 	})
 }
 
+/*
 func HandleInfo(w http.ResponseWriter, r *http.Request) {
 	db := r.Context().Value(KeyDB).(*sql.DB)
 	id := NewIdentity(r)
@@ -57,12 +57,12 @@ func HandleInfo(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		httpError(w, err, http.StatusInternalServerError)
 		return
-	}*/
+	}
 	/*meta, err := MetadataDisplayList(db)
 	if err != nil {
 		httpError(w, err, http.StatusInternalServerError)
 		return
-	}*/
+	}
 	meta := make(map[string]MetadataValue)
 	meta["movie"] = MetadataValue{Value: &title}
 	info := struct {
@@ -74,7 +74,9 @@ func HandleInfo(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewEncoder(w).Encode(info)
 }
+*/
 
+/*
 func MetadataUpdate(w http.ResponseWriter, r *http.Request) {
 	k := r.URL.Query().Get("k")
 	if k == "" {
@@ -108,7 +110,9 @@ func MetadataUpdate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 }
+*/
 
+/*
 func HandleManifest(w http.ResponseWriter, r *http.Request) {
 	db := r.Context().Value(KeyDB).(*sql.DB)
 	val, err := MetadataGet(db, "manifest")
@@ -126,7 +130,9 @@ func HandleManifest(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Fprint(w, *val)
 }
+*/
 
+/*
 func HandleCastVote(w http.ResponseWriter, r *http.Request) {
 	db := r.Context().Value(KeyDB).(*sql.DB)
 	id, err := strconv.ParseInt(r.URL.Query().Get("id"), 10, 64)
@@ -141,10 +147,37 @@ func HandleCastVote(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 }
+*/
+
+func HandleToken(w http.ResponseWriter, r *http.Request) {
+	id := NewIdentity(r)
+	rc := r.Context().Value(KeyRedis).(*redis.Client)
+	err := id.Register(rc)
+	if err != nil {
+		httpError(w, err, http.StatusInternalServerError)
+		return
+	}
+	fmt.Fprint(w, id.Key)
+}
+
+func HandlePing(w http.ResponseWriter, r *http.Request) {
+	rc := r.Context().Value(KeyRedis).(*redis.Client)
+	t := r.URL.Query().Get("t")
+	if t == "" {
+		httpError(w, nil, http.StatusBadRequest)
+		return
+	}
+	id := Identity{Key: t}
+	err := id.LogVisit(rc)
+	if err != nil {
+		httpError(w, err, http.StatusInternalServerError)
+		return
+	}
+}
 
 func HandleViewers(w http.ResponseWriter, r *http.Request) {
-	db := r.Context().Value(KeyDB).(*sql.DB)
-	n, err := SessionCount(db)
+	rc := r.Context().Value(KeyRedis).(*redis.Client)
+	n, err := SessionCount(rc)
 	if err != nil {
 		httpError(w, err, http.StatusInternalServerError)
 		return
@@ -152,6 +185,7 @@ func HandleViewers(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, n)
 }
 
+/*
 func HandleLastResults(w http.ResponseWriter, r *http.Request) {
 	db := r.Context().Value(KeyDB).(*sql.DB)
 	title, votes, err := LastVote(db)
@@ -171,3 +205,4 @@ func HandleLastResults(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
+*/

@@ -1,10 +1,9 @@
 package televise
 
 import (
+	"context"
 	"database/sql"
 	"time"
-
-	"golang.org/x/net/context"
 )
 
 var displayKeys = []string{

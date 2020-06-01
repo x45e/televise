@@ -6,4 +6,5 @@ const (
 	KeyDB ContextKey = iota
 	KeyCount
 	KeyTitle
+	KeyRedis
 )

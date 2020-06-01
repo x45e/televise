@@ -31,6 +31,7 @@ func Start(cfg Config) (*App, error) {
 	if err := rc.Ping(context.Background()).Err(); err != nil {
 		return nil, err
 	}
+	PruneSessions(rc)
 
 	ctx = context.WithValue(ctx, KeyRedis, rc)
 
@@ -47,6 +48,7 @@ func Start(cfg Config) (*App, error) {
 				*viewers = n
 			}
 			time.Sleep(10 * time.Second)
+			PruneSessions(c)
 		}
 	}(rc, &viewers)
 

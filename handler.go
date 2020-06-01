@@ -173,6 +173,15 @@ func HandlePing(w http.ResponseWriter, r *http.Request) {
 		httpError(w, err, http.StatusInternalServerError)
 		return
 	}
+	count := r.Context().Value(KeyCount)
+	var viewers int64
+	if count != nil {
+		n := r.Context().Value(KeyCount).(*int64)
+		if n != nil {
+			viewers = *n
+		}
+	}
+	fmt.Fprint(w, viewers)
 }
 
 func HandleViewers(w http.ResponseWriter, r *http.Request) {
